@@ -1,0 +1,274 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\About;
+use App\Models\Cart;
+use App\Models\Category;
+use App\Models\Contact;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Session;
+
+class HomeController extends Controller
+{
+    /**
+     * Create a new controller instance.
+     *
+     * @return void
+     */
+    public function __construct()
+    {
+       $categories = Category::where('status',1)->get();
+       view()->share(['categories'=>$categories]);
+    
+    }
+
+    /**
+     * Show the application dashboard.
+     *
+     * @return \Illuminate\Contracts\Support\Renderable
+     */
+    public function index()
+    {
+        $categories = Category::where('status',1)->get();
+        $products = Product::where('status',1)->get();
+        return view('home.index',compact("categories","products"));
+    }
+    public function showLogin()
+    {
+        return view('home.login');
+    }
+
+    public function loginUser(Request $request)
+    {
+        $customer = Customer::where('email', $request->email)->first();
+
+        if(!$customer){
+            return back()->with('error','Email không tồn tại');
+        }
+
+        // So sánh password thường (vì DB chưa hash)
+        if($request->password !== $customer->password){
+            return back()->with('error','Mật khẩu không đúng');
+        }
+
+        session([
+            'customer' => [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'email' => $customer->email,
+            ]
+        ]);
+
+        return redirect('/')->with('success','Đăng nhập thành công');
+    }
+
+    public function logoutUser()
+    {
+        session()->forget('customer');
+        return redirect('/')->with('success','Đã đăng xuất');
+    }
+
+    public function showRegister()
+    {
+        return view('home.register');
+    }
+    public function registerUser(Request $request)
+    {
+        $request->validate([
+            'name' => 'required',
+            'email' => 'required|email|unique:customers,email',
+            'password' => 'required|min:6',
+        ]);
+
+        Customer::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            // ❗ ĐỒ ÁN: chưa hash cũng được
+            'password' => $request->password,
+            'status' => 1,
+        ]);
+
+        return redirect()->route('user.login.form')
+            ->with('success','Đăng ký thành công! Vui lòng đăng nhập');
+    }
+
+    public function logout()
+    {
+        if (Auth::check()) {
+            Auth::logout();
+            return redirect('/');
+        }
+    }
+    public function product()
+    {
+        $products = Product::where('status',1)->get();
+        return view('home.product', compact('products'));
+    }
+    public function category_product($id){
+        $products = Product::where([
+            ['category_id','=',$id]
+            ,['status','=','1']
+        ])->get();
+        return view('home.category_product',compact("products","products"));
+    }
+    public function single_product($id){
+        $product = Product::where(
+            [
+                ['id','=',$id],
+                ['status','=','1'],
+            ]
+        )->get()->first();
+        return view('home.single_product',compact("product","product"));
+    }
+    public function about()
+    {
+        $about = About::where('status', 1)->first();
+
+        return view('home.about', compact('about'));
+    }
+
+    public function contact()
+    {
+        $contact = Contact::where('status', 1)->first();
+
+        return view('home.contact', compact('contact'));
+    }
+
+    public function contactSubmit(Request $request)
+{
+    $request->validate([
+        'name' => 'required',
+        'email' => 'required|email',
+        'subject' => 'required',
+        'message' => 'required',
+    ]);
+
+    Contact::create($request->all());
+
+    return back()->with('success', 'Gửi liên hệ thành công!');
+}
+    public function addToCart($id)
+    {
+        $product = Product::findOrFail($id);
+        $cart = Session::get('cart', []);
+
+        if(isset($cart[$id])){
+            $cart[$id]['quantity']++;
+        } else {
+            $cart[$id] = [
+                "id" => $product->id,
+                "name" => $product->name,
+                "quantity" => 1,
+                "price" => $product->price,
+                "image" => $product->image
+            ];
+        }
+
+        Session::put('cart', $cart);
+        return redirect()->back()->with('success', 'Thêm sản phẩm vào giỏ hàng thành công!');
+    }
+    public function cart()
+    {
+        return view('home.cart');
+    }
+
+    public function updateCart(Request $request, $id)
+    {
+        $cart = session()->get('cart', []);
+
+        if(isset($cart[$id])){
+            $cart[$id]['quantity'] = $request->quantity;
+            session()->put('cart', $cart);
+            return back()->with('success', 'Cart updated!');
+        }
+
+        return back()->with('error', 'Product not found in cart!');
+    }
+
+    // Remove sản phẩm khỏi giỏ hàng
+    public function removeFromCart($id)
+    {
+        $cart = session()->get('cart', []);
+
+        if(isset($cart[$id])){
+            unset($cart[$id]);
+            session()->put('cart', $cart);
+            return back()->with('success', 'Product removed!');
+        }
+
+        return back()->with('error', 'Product not found in cart!');
+    }
+    public function checkout()
+    {
+        $cart = session()->get('cart', []);
+        $total = 0;
+        foreach($cart as $product){
+            $total += $product['price'] * $product['quantity'];
+        }
+
+        return view('home.checkout', compact('cart', 'total'));
+    }
+
+    // Xử lý thanh toán (giả lập)
+    public function processCheckout(Request $request)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login')->with('error', 'Bạn cần đăng nhập để thanh toán!');
+        }
+
+        $cart = session()->get('cart', []);
+        if (!$cart || count($cart) == 0) {
+            return back()->with('error', 'Giỏ hàng của bạn đang trống!');
+        }
+
+        // Lấy customer theo email đăng nhập
+        $customer = Customer::where('email', Auth::user()->email)->first();
+
+        if (!$customer) {
+            return back()->with('error', 'Không tìm thấy thông tin khách hàng!');
+        }
+
+        // Tính tổng tiền
+        $total = 0;
+        foreach ($cart as $item) {
+            $total += $item['price'] * $item['quantity'];
+        }
+
+        // Tạo đơn hàng
+        $order = Order::create([
+            'customer_id' => $customer->id, // ✅ ĐÚNG DB
+            'total_price' => $total,
+            'status' => 'Chờ xử lý',
+        ]);
+
+        // Lưu chi tiết đơn hàng
+        foreach ($cart as $item) {
+            OrderItem::create([
+                'order_id' => $order->id,
+                'product_id' => $item['id'], // bạn đã fix cart rồi 👍
+                'quantity' => $item['quantity'],
+                'price' => $item['price'],
+            ]);
+        }
+
+        // Xóa giỏ hàng
+        Session::forget('cart');
+
+        return redirect()->route('order.view', $order->id)->with('success','Thanh toán thành công!');
+
+    }
+    public function myOrder($id)
+    {
+        $order = Order::with('items')->findOrFail($id);
+
+        return view('home.order_success', compact('order'));
+    }
+    
+}
