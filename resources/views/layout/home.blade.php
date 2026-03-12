@@ -131,7 +131,7 @@
                            <li><a href="{{ route('product',1) }}">Products</a></li>
                            <li><a href="{{ route('single_product',1) }}">Single Product</a></li>
                            <li><a href="{{ route('contact') }}">Contact</a></li>
-                           <li><a href="{{ route('category_product', ['category' => $object->id]) }}">All Category</a></li>
+                           <li><a href="{{ route('product') }}">All Category</a></li>
                         </ul>
                      </div>
                   </div>
