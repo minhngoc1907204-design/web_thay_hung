@@ -11,47 +11,46 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
+
     public function __construct()
     {
-        // cho phép API chạy không cần login
-        $this->middleware("auth")->except([
-            'apiIndex',
-            'apiShow',
-            'apiStore',
-            'apiUpdate',
-            'apiDestroy'
-        ]);
-
         view()->share("products", Product::all());
         view()->share("comments", Comment::all());
         view()->share("ratings", Rating::all());
     }
 
-    // ================= WEB ADMIN =================
+    // ================= API =================
 
-    public function index(Request $request)
+    // GET /api/products
+    public function index()
     {
-        $query = Product::with('category');
+        $products = Product::with('category')->get();
 
-        if ($request->search) {
-            $query->where('name', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->status !== null && $request->status !== '') {
-            $query->where('status', $request->status);
-        }
-
-        $products = $query->get();
-
-        return view("admin.products_management.product-list", compact("products"));
+        return response()->json([
+            "status" => "success",
+            "data" => $products
+        ]);
     }
 
-    public function create()
+    // GET /api/products/{id}
+    public function show($id)
     {
-        $categories = Category::all();
-        return view("admin.products_management.add", compact("categories"));
+        $product = Product::with('category')->find($id);
+
+        if (!$product) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Product not found"
+            ], 404);
+        }
+
+        return response()->json([
+            "status" => "success",
+            "data" => $product
+        ]);
     }
 
+    // POST /api/products
     public function store(Request $request)
     {
         $product = Product::create([
@@ -64,31 +63,24 @@ class ProductController extends Controller
             'status' => $request->status ?? 1,
         ]);
 
-        if ($product) {
-            return redirect()->route('admin.products_management.index');
-        }
-
-        return back();
+        return response()->json([
+            "status" => "success",
+            "data" => $product
+        ]);
     }
 
-    public function show($id)
-    {
-        $product = Product::find($id);
-        return view('admin.products_management.show', compact('product'));
-    }
-
-    public function edit($id)
-    {
-        $product = Product::find($id);
-        $categories = Category::all();
-
-        return view('admin.products_management.edit', compact('categories', 'product'));
-    }
-
+    // PUT /api/products/{id}
     public function update(Request $request, $id)
     {
         $product = Product::find($id);
 
+        if (!$product) {
+            return response()->json([
+                "status" => "error",
+                "message" => "Product not found"
+            ], 404);
+        }
+
         $product->update([
             'category_id' => $request->category_id,
             'name' => $request->name,
@@ -99,113 +91,22 @@ class ProductController extends Controller
             'status' => $request->status,
         ]);
 
-        if ($product) {
-            return redirect()->route("admin.products_management.index");
-        }
-
-        return back();
+        return response()->json([
+            "status" => "success",
+            "data" => $product
+        ]);
     }
 
+    // DELETE /api/products/{id}
     public function destroy($id)
     {
         $product = Product::find($id);
-        $product->delete();
-
-        if ($product) {
-            return redirect()->route("admin.products_management.index");
-        }
-
-        return back();
-    }
-
-    // ================= API =================
-
-    // lấy tất cả sản phẩm
-    public function apiIndex()
-    {
-        $products = Product::with('category')->get();
-
-        return response()->json([
-            "status" => "success",
-            "data" => $products
-        ]);
-    }
-
-    // lấy chi tiết sản phẩm
-    public function apiShow($id)
-    {
-        $product = Product::with('category')->find($id);
 
         if (!$product) {
             return response()->json([
                 "status" => "error",
                 "message" => "Product not found"
-            ]);
-        }
-
-        return response()->json([
-            "status" => "success",
-            "data" => $product
-        ]);
-    }
-
-    // thêm sản phẩm
-    public function apiStore(Request $request)
-    {
-        $product = Product::create([
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'image' => $request->image,
-            'description' => $request->description,
-            'status' => $request->status ?? 1,
-        ]);
-
-        return response()->json([
-            "status" => "success",
-            "data" => $product
-        ]);
-    }
-
-    // cập nhật sản phẩm
-    public function apiUpdate(Request $request, $id)
-    {
-        $product = Product::find($id);
-
-        if (!$product) {
-            return response()->json([
-                "status" => "error",
-                "message" => "Product not found"
-            ]);
-        }
-
-        $product->update([
-            'category_id' => $request->category_id,
-            'name' => $request->name,
-            'price' => $request->price,
-            'stock' => $request->stock,
-            'image' => $request->image,
-            'description' => $request->description,
-            'status' => $request->status,
-        ]);
-
-        return response()->json([
-            "status" => "success",
-            "data" => $product
-        ]);
-    }
-
-    // xoá sản phẩm
-    public function apiDestroy($id)
-    {
-        $product = Product::find($id);
-
-        if (!$product) {
-            return response()->json([
-                "status" => "error",
-                "message" => "Product not found"
-            ]);
+            ], 404);
         }
 
         $product->delete();
@@ -215,4 +116,5 @@ class ProductController extends Controller
             "message" => "Product deleted"
         ]);
     }
+
 }
