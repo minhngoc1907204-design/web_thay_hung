@@ -32,7 +32,7 @@ Route::get('/about', [HomeController::class, 'about'])->name('about');
 Route::get('/contact', [HomeController::class, 'contact'])->name('contact');
 Route::post('/contact', [HomeController::class, 'contactSubmit'])->name('contact.submit');
 Route::get('/product', [App\Http\Controllers\HomeController::class,'product'])->name('product');
-Route::get('/product/{id}', [App\Http\Controllers\HomeController::class,'single_product'])->name('single_product');
+Route::get('/product/{id}', [App\Http\Controllers\HomeController::class,'single_product'])->name('product.show');
 Route::get('/cart', [HomeController::class, 'cart'])->name('cart.index');
 Route::get('/cart/add/{id}', [HomeController::class, 'addToCart'])->name('cart.add');
 Route::delete('/cart/remove/{id}', [HomeController::class, 'removeFromCart'])->name('cart.remove');
